@@ -101,20 +101,51 @@ two blocks disagree with each other everywhere except the causal SNP.
 
 ## Fine-mapping execution
 
-- **susieR (single-ancestry, ×2)**: install from the local
-  `../susier` checkout (the actual `stephenslab/susieR` source) via
-  `remotes::install_local()` — compiles from source. A small R script
+Both tools are installed from their **official released packages**
+(CRAN / PyPI), pinned to an exact version — not from the local
+`../susier` / `../sushie` forks in the parent directory.
+
+- **susieR (single-ancestry, ×2)**: install from CRAN, pinned to the
+  current release **0.14.2** via
+  `remotes::install_version("susieR", version = "0.14.2")` (falls back
+  to `install.packages("susieR")` + recorded `packageVersion()` if
+  pinning is unavailable). A small R script
   `example/scripts/finemap_susieR.R` takes a GWAS tsv + LD tsv +
   sample size, calls `susieR::susie_rss(z=z, R=R, n=n, L=1)`, and
   writes a tsv of `snp, pos, z, pip, cs_id` (`cs_id` is `NA`/0 for SNPs
   outside any credible set) plus the CS size.
-- **sushie (joint)**: use the local `../sushie` checkout's own
-  `uv`-managed environment (the actual `mancusolab/sushie` source),
-  i.e. `uv sync` inside `../sushie`, then
-  `uv run sushie-legacy finemap --summary --gwas EUR.gwas.tsv AFR.gwas.tsv --ld EUR.ld.tsv AFR.ld.tsv --sample-size 50000 20000 --L 1 --trait locus1 --output <path>`,
+- **sushie (joint)**: install from PyPI, pinned to the current release
+  **`sushie==0.20`**, as a regular dependency of `example/`'s own
+  `uv`-managed venv (`uv add sushie==0.20`; requires Python ≥3.11,
+  satisfied by the system's 3.12). Confirmed the released package's
+  console entry point is `sushie` (pointing at the classic
+  `sushie.cli:run_cli`, the same summary-stats interface described
+  below) — not `sushie-legacy`, which only exists in the fork. Run:
+  `uv run sushie finemap --summary --gwas EUR.gwas.tsv AFR.gwas.tsv --ld EUR.ld.tsv AFR.ld.tsv --sample-size 50000 20000 --L 1 --trait locus1 --output <path>`,
   reading back its `.cs.tsv` / PIP output.
 - Both use `L=1` (matches the single simulated causal variant and
   keeps credible-set output unambiguous).
+
+## Reproducibility
+
+- **Fixed random seed** for the entire simulation (genotypes,
+  phenotype noise, block-factor draws) — once the qualitative CS
+  pattern holds, the seed is frozen and never changed again.
+- **Pinned, released tool versions** rather than local forks:
+  `sushie==0.20` (PyPI) and `susieR` `0.14.2` (CRAN), both recorded
+  explicitly (see below) so re-running months later reproduces the
+  same fine-mapping behavior even if newer releases change defaults.
+- `example/pyproject.toml` + committed `uv.lock` pin the full Python
+  dependency graph (Python ≥3.11, `sushie==0.20`, numpy/scipy/
+  matplotlib for simulation and plotting).
+- The R side has no project-level lockfile manager available here, so
+  `example/scripts/finemap_susieR.R` pins the package version at
+  install time (`remotes::install_version`) and the orchestrator
+  writes the resolved `R.version.string` + `packageVersion("susieR")`
+  into `example/results/versions.txt` for the record.
+- `example/README.md` documents the exact commands to reproduce every
+  artifact from scratch (simulate → fine-map → plot), so the whole
+  pipeline is a handful of copy-pasteable commands.
 
 ## Plots (`example/results/`, matplotlib, saved as PNG)
 
@@ -137,20 +168,23 @@ two blocks disagree with each other everywhere except the causal SNP.
 
 ```
 example/
+  pyproject.toml            # pins sushie==0.20, python>=3.11, numpy/scipy/matplotlib
+  uv.lock                    # committed, full resolved dependency graph
   data/
     EUR.gwas.tsv
     AFR.gwas.tsv
     EUR.ld.tsv
     AFR.ld.tsv
   scripts/
-    simulate.py            # genotype/phenotype/GWAS/LD simulation
-    finemap_susieR.R        # single-ancestry susie_rss runner
-    run_finemapping.sh       # orchestrates susieR (x2) + sushie-legacy
+    simulate.py            # genotype/phenotype/GWAS/LD simulation (fixed seed)
+    finemap_susieR.R        # single-ancestry susie_rss runner (pinned susieR 0.14.2)
+    run_finemapping.sh       # orchestrates susieR (x2) + sushie, writes versions.txt
     plot_results.py         # builds both figures
   results/
     EUR.susieR.cs.tsv
     AFR.susieR.cs.tsv
-    locus1.sushie.cs.tsv (+ whatever else sushie-legacy emits)
+    locus1.sushie.cs.tsv (+ whatever else `sushie finemap` emits)
+    versions.txt              # R/Python/susieR/sushie versions actually used
     fig1_locus_ld.png
     fig2_finemapping.png
   README.md                  # how to reproduce, one command each step
