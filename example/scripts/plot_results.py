@@ -47,5 +47,45 @@ def plot_locus_and_ld():
     plt.close(fig)
 
 
+def load_susieR_cs(path):
+    return pd.read_csv(path, sep="\t")
+
+
+def load_sushie_weights(path):
+    df = pd.read_csv(path, sep="\t")
+    df["pip"] = df["sushie_pip_all"]
+    df["in_cs"] = df["sushie_cs_index"] != "No CS"
+    return df
+
+
+def plot_pip_panel(ax, pos, pip, in_cs, title):
+    colors = np.where(in_cs, "#C44E52", "#8C8C8C")
+    ax.scatter(pos, pip, c=colors)
+    ax.set_ylim(-0.05, 1.05)
+    ax.set_xlabel("Position (bp)")
+    ax.set_ylabel("PIP")
+    cs_size = int(np.sum(in_cs))
+    ax.set_title(f"{title} (CS size = {cs_size})")
+
+
+def plot_finemapping_results():
+    eur = load_susieR_cs(RESULTS_DIR / "EUR.susieR.cs.tsv")
+    afr = load_susieR_cs(RESULTS_DIR / "AFR.susieR.cs.tsv")
+    sushie = load_sushie_weights(RESULTS_DIR / "locus1.sushie.weights.tsv")
+
+    fig, axes = plt.subplots(2, 2, figsize=(11, 9))
+    ax_blank, ax_afr, ax_eur, ax_sushie = axes[0, 0], axes[0, 1], axes[1, 0], axes[1, 1]
+
+    ax_blank.axis("off")
+    plot_pip_panel(ax_afr, afr["pos"], afr["pip"], afr["cs_id"] == 1, "AFR susieR")
+    plot_pip_panel(ax_eur, eur["pos"], eur["pip"], eur["cs_id"] == 1, "EUR susieR")
+    plot_pip_panel(ax_sushie, sushie["pos"], sushie["pip"], sushie["in_cs"], "sushie (EUR+AFR)")
+
+    fig.tight_layout()
+    fig.savefig(RESULTS_DIR / "fig2_finemapping.png", dpi=150)
+    plt.close(fig)
+
+
 if __name__ == "__main__":
     plot_locus_and_ld()
+    plot_finemapping_results()
