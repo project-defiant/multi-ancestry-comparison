@@ -3,6 +3,7 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+from adjustText import adjust_text
 from PIL import Image
 from plotnine import (
     aes,
@@ -29,6 +30,8 @@ DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 PANEL_WIDTH = 6.5
 PANEL_HEIGHT = 5.5
 DPI = 200
+GRID_ROWS = 2
+GRID_COLS = 3
 
 RED = "#C44E52"
 GREY = "#8C8C8C"
@@ -39,6 +42,7 @@ def theme_presentation(base_size=18, legend_position="none"):
         theme_minimal(base_size=base_size)
         + theme(
             legend_position=legend_position,
+            figure_size=(PANEL_WIDTH, PANEL_HEIGHT),
             plot_background=element_rect(fill="none", color="none"),
             panel_background=element_rect(fill="none", color="none"),
             legend_background=element_rect(fill="none", color="none"),
@@ -74,33 +78,54 @@ def load_sushie_weights(path):
     return df
 
 
-def render_panel(plot, path):
-    plot.save(
-        path,
-        width=PANEL_WIDTH,
-        height=PANEL_HEIGHT,
-        dpi=DPI,
-        transparent=True,
-        verbose=False,
-    )
+def render_panel(plot, label_anchors=None):
+    """Draw a plotnine plot to a matplotlib Figure. If label_anchors (a
+    DataFrame with 'pos'/'pip' columns, one row per geom_text label already
+    on the plot, in the same order) is given, nudge the labels apart with
+    adjustText so they stay as close as possible to their own point while
+    never overlapping, drawing a thin leader line back to the point when a
+    label has to move away from it."""
+    fig = plot.draw()
+    ax = fig.axes[0]
+    if label_anchors is not None and len(label_anchors) > 0:
+        texts = list(ax.texts)
+        adjust_text(
+            texts,
+            x=list(label_anchors["pos"]),
+            y=list(label_anchors["pip"]),
+            ax=ax,
+            expand_axes=True,
+            force_text=(0.4, 0.8),
+            expand=(1.3, 1.6),
+            arrowprops=dict(arrowstyle="-", color=RED, lw=1.2, alpha=0.7),
+        )
+    return fig
 
 
-def compose_grid(panels, output_path):
-    """panels: length-4 list in [top-left, top-right, bottom-left, bottom-right]
-    order; a None entry leaves that tile transparent/blank."""
+def panel_to_image(fig):
     px_w, px_h = int(PANEL_WIDTH * DPI), int(PANEL_HEIGHT * DPI)
-    canvas = Image.new("RGBA", (px_w * 2, px_h * 2), (0, 0, 0, 0))
     with tempfile.TemporaryDirectory() as tmp:
-        for idx, plot in enumerate(panels):
-            if plot is None:
-                continue
-            panel_path = Path(tmp) / f"panel_{idx}.png"
-            render_panel(plot, panel_path)
-            img = Image.open(panel_path).convert("RGBA")
-            if img.size != (px_w, px_h):
-                img = img.resize((px_w, px_h), Image.LANCZOS)
-            row, col = divmod(idx, 2)
-            canvas.paste(img, (col * px_w, row * px_h), img)
+        panel_path = Path(tmp) / "panel.png"
+        fig.savefig(panel_path, dpi=DPI, transparent=True)
+        img = Image.open(panel_path).convert("RGBA")
+    if img.size != (px_w, px_h):
+        img = img.resize((px_w, px_h), Image.LANCZOS)
+    return img
+
+
+def compose_grid(panels, output_path, rows=GRID_ROWS, cols=GRID_COLS):
+    """panels: row-major list of (plot, label_anchors) tuples, or None for a
+    blank tile. label_anchors is passed through to render_panel."""
+    px_w, px_h = int(PANEL_WIDTH * DPI), int(PANEL_HEIGHT * DPI)
+    canvas = Image.new("RGBA", (px_w * cols, px_h * rows), (0, 0, 0, 0))
+    for idx, panel in enumerate(panels):
+        if panel is None:
+            continue
+        plot, label_anchors = panel
+        fig = render_panel(plot, label_anchors)
+        img = panel_to_image(fig)
+        row, col = divmod(idx, cols)
+        canvas.paste(img, (col * px_w, row * px_h), img)
     canvas.save(output_path)
 
 
@@ -108,13 +133,14 @@ def build_locus_zoom_panel(eur_gwas, afr_gwas):
     eur = eur_gwas.assign(ancestry="EUR", neglog10p=-np.log10(eur_gwas["pval"]))
     afr = afr_gwas.assign(ancestry="AFR", neglog10p=-np.log10(afr_gwas["pval"]))
     long_df = pd.concat([eur, afr], ignore_index=True)
-    return (
+    plot = (
         ggplot(long_df, aes(x="pos", y="neglog10p", color="ancestry"))
         + geom_point(size=4, alpha=0.85)
         + scale_color_manual(values={"EUR": "#4C72B0", "AFR": "#DD8452"}, name="Ancestry")
         + labs(x="Position (bp)", y="-log10(p)", title="GWAS locus zoom")
         + theme_presentation(legend_position="right")
     )
+    return plot, None
 
 
 def build_ld_panel(ld_matrix, title):
@@ -123,7 +149,7 @@ def build_ld_panel(ld_matrix, title):
         [(i, j, ld_matrix[i, j]) for i in range(n) for j in range(n)],
         columns=["i", "j", "r"],
     )
-    return (
+    plot = (
         ggplot(long_df, aes(x="j", y="i", fill="r"))
         + geom_tile()
         + scale_fill_gradient2(low="#2166AC", mid="#F7F7F7", high="#B2182B", midpoint=0, limits=(-1, 1), name="r")
@@ -132,64 +158,52 @@ def build_ld_panel(ld_matrix, title):
         + labs(x="SNP index", y="SNP index", title=title)
         + theme_presentation(legend_position="right")
     )
-
-
-def plot_locus_and_ld():
-    eur_gwas = load_gwas(DATA_DIR / "EUR.gwas.tsv")
-    afr_gwas = load_gwas(DATA_DIR / "AFR.gwas.tsv")
-    eur_ld = load_ld(DATA_DIR / "EUR.ld.tsv")
-    afr_ld = load_ld(DATA_DIR / "AFR.ld.tsv")
-
-    locus_panel = build_locus_zoom_panel(eur_gwas, afr_gwas)
-    afr_ld_panel = build_ld_panel(afr_ld, "AFR LD matrix")
-    eur_ld_panel = build_ld_panel(eur_ld, "EUR LD matrix")
-
-    compose_grid(
-        [locus_panel, afr_ld_panel, eur_ld_panel, None],
-        RESULTS_DIR / "fig1_locus_ld.png",
-    )
+    return plot, None
 
 
 def build_pip_panel(df, title):
     cs_size = int(df["in_cs"].sum())
     labels = df[df["in_cs"]].sort_values("pos").reset_index(drop=True)
-    # Stack labels in tiers above the panel's highest point (rather than each
-    # point's own PIP) so closely-spaced tag SNPs don't overlap each other.
-    tier_gaps = [0.06, 0.18, 0.30]
-    top = df["pip"].max()
-    labels["label_y"] = [top + tier_gaps[i % len(tier_gaps)] for i in range(len(labels))]
-    return (
+    plot = (
         ggplot(df, aes(x="pos", y="pip", color="in_cs"))
         + geom_point(size=5)
         + geom_text(
             data=labels,
-            mapping=aes(y="label_y", label="snp"),
+            mapping=aes(label="snp"),
+            nudge_y=0.035,
             size=13,
             color=RED,
             fontweight="bold",
         )
         + scale_color_manual(values={True: RED, False: GREY})
-        + ylim(-0.05, 1.4)
+        + ylim(-0.05, 1.15)
         + labs(x="Position (bp)", y="PIP", title=f"{title} (CS size = {cs_size})")
         + theme_presentation()
     )
+    return plot, labels
 
 
-def plot_finemapping_results():
-    eur = load_susieR_cs(RESULTS_DIR / "EUR.susieR.cs.tsv")
-    afr = load_susieR_cs(RESULTS_DIR / "AFR.susieR.cs.tsv")
+def plot_summary_figure():
+    eur_gwas = load_gwas(DATA_DIR / "EUR.gwas.tsv")
+    afr_gwas = load_gwas(DATA_DIR / "AFR.gwas.tsv")
+    eur_ld = load_ld(DATA_DIR / "EUR.ld.tsv")
+    afr_ld = load_ld(DATA_DIR / "AFR.ld.tsv")
+
+    eur_cs = load_susieR_cs(RESULTS_DIR / "EUR.susieR.cs.tsv")
+    afr_cs = load_susieR_cs(RESULTS_DIR / "AFR.susieR.cs.tsv")
     sushie = load_sushie_weights(RESULTS_DIR / "locus1.sushie.weights.tsv")
 
-    afr_panel = build_pip_panel(afr, "AFR susieR")
-    eur_panel = build_pip_panel(eur, "EUR susieR")
-    sushie_panel = build_pip_panel(sushie, "sushie (EUR+AFR)")
+    panels = [
+        build_locus_zoom_panel(eur_gwas, afr_gwas),
+        build_ld_panel(afr_ld, "AFR LD matrix"),
+        build_ld_panel(eur_ld, "EUR LD matrix"),
+        build_pip_panel(afr_cs, "AFR susieR"),
+        build_pip_panel(eur_cs, "EUR susieR"),
+        build_pip_panel(sushie, "sushie (EUR+AFR)"),
+    ]
 
-    compose_grid(
-        [None, afr_panel, eur_panel, sushie_panel],
-        RESULTS_DIR / "fig2_finemapping.png",
-    )
+    compose_grid(panels, RESULTS_DIR / "fig_finemapping_summary.png")
 
 
 if __name__ == "__main__":
-    plot_locus_and_ld()
-    plot_finemapping_results()
+    plot_summary_figure()

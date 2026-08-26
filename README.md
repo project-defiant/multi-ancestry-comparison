@@ -15,8 +15,8 @@ to essentially the one true causal SNP.
 ## Contents
 
 - **[`example/`](example/)** — the runnable pipeline: simulation, fine-mapping
-  (pinned `susieR` 0.14.2 from CRAN, `sushie` 0.20 from PyPI), and the two
-  result figures. See [`example/README.md`](example/README.md) for setup
+  (pinned `susieR` 0.14.2 from CRAN, `sushie` 0.20 from PyPI), and the
+  result figure. See [`example/README.md`](example/README.md) for setup
   and reproduction instructions.
 - **[`docs/superpowers/specs/`](docs/superpowers/specs/)** — the design
   doc explaining the simulation approach and why it demonstrates the
@@ -35,7 +35,7 @@ Rscript -e 'remotes::install_version("susieR", version = "0.14.2", repos = "http
 uv run python scripts/plot_results.py
 ```
 
-This produces `example/results/fig1_locus_ld.png` (the GWAS locus and both
-ancestries' LD matrices) and `example/results/fig2_finemapping.png` (the
-PIP/credible-set comparison across EUR susieR, AFR susieR, and joint
-sushie).
+This produces `example/results/fig_finemapping_summary.png` — a single
+2 x 3 figure with the GWAS locus and both ancestries' LD matrices on top,
+and the PIP/credible-set comparison across AFR susieR, EUR susieR, and
+joint sushie on the bottom.

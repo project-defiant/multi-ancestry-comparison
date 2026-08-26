@@ -66,10 +66,19 @@ across the Python/R boundary:
    infix: `{output}.sushie.weights.tsv` (per-SNP PIP across all 50 SNPs,
    columns include `sushie_pip_all`, `sushie_cs_index`) and
    `{output}.sushie.cs.tsv` (only the SNPs inside a credible set).
-4. **`scripts/plot_results.py`** — renders `fig1_locus_ld.png` (GWAS
-   locus zoom + both LD heatmaps) and `fig2_finemapping.png` (PIP panels
-   with credible-set size in the title, for EUR susieR, AFR susieR, and
-   joint sushie).
+4. **`scripts/plot_results.py`** — renders a single `fig_finemapping_summary.png`
+   (plotnine, transparent background, 2 rows x 3 columns): top row is the
+   GWAS locus zoom plus both LD heatmaps, bottom row is the PIP/credible-set
+   panel for EUR susieR, AFR susieR, and joint sushie (credible-set size in
+   each title). Each panel is drawn separately with plotnine (transparent
+   background, `figure_size` fixed via `theme_presentation`), then
+   composited into the grid with Pillow — plotnine has no native multi-panel
+   layout for heterogeneous geoms (tiles + points), so raster compositing is
+   the deliberate choice here, not an oversight. PIP-panel SNP-id labels are
+   placed with `adjustText` (`render_panel`'s `label_anchors` argument):
+   labels start near their own point and get nudged apart only as much as
+   needed to avoid collisions, with a thin leader line back to the point
+   when they move.
 
 `scripts/run_finemapping.sh` runs simulate → both susieR calls → sushie →
 `check_cs_sizes.py`, and records the exact tool versions used in

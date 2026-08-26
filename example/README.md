@@ -25,12 +25,13 @@ uv run python scripts/plot_results.py
 ```
 
 This regenerates `data/*.tsv`, `results/*.cs.tsv` / `results/*.weights.tsv`,
-`results/versions.txt`, and the two figures:
+`results/versions.txt`, and one combined figure:
 
-- `results/fig1_locus_ld.png` — GWAS locus zoom (EUR vs AFR) and both
-  ancestries' LD matrices.
-- `results/fig2_finemapping.png` — single-ancestry susieR PIP/credible-set
-  panels for EUR and AFR, and the joint sushie PIP/credible-set panel.
+- `results/fig_finemapping_summary.png` — 2 rows x 3 columns (plotnine,
+  transparent background). Top row: GWAS locus zoom (EUR vs AFR) and both
+  ancestries' LD matrices. Bottom row: PIP/credible-set panels for AFR
+  susieR, EUR susieR, and joint sushie, each credible-set SNP labeled by
+  ID.
 
 `scripts/check_cs_sizes.py` (run automatically at the end of
 `run_finemapping.sh`) asserts that both single-ancestry credible sets are
