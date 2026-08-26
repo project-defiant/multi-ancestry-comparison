@@ -57,3 +57,87 @@ def simulate_genotypes(n_individuals, blocks, block_rhos, mafs, rng):
             liability[:, block] = np.sqrt(rho) * factor[:, None] + np.sqrt(1 - rho) * idio
         dosage += (liability > thresholds).astype(float)
     return dosage
+
+
+def simulate_phenotype(genotype, causal_idx, h2, rng):
+    x = (genotype - genotype.mean(axis=0)) / genotype.std(axis=0)
+    g = x[:, causal_idx]
+    s2g = np.var(g)
+    s2e = s2g * (1 / h2 - 1)
+    noise = rng.standard_normal(genotype.shape[0]) * np.sqrt(s2e)
+    return g + noise
+
+
+def marginal_regression(genotype, y):
+    n_variants = genotype.shape[1]
+    betas = np.empty(n_variants)
+    ses = np.empty(n_variants)
+    pvals = np.empty(n_variants)
+    zs = np.empty(n_variants)
+    for j in range(n_variants):
+        res = stats.linregress(genotype[:, j], y)
+        betas[j] = res.slope
+        ses[j] = res.stderr
+        pvals[j] = res.pvalue
+        zs[j] = res.slope / res.stderr
+    return betas, ses, pvals, zs
+
+
+def compute_ld(genotype):
+    x = (genotype - genotype.mean(axis=0)) / genotype.std(axis=0)
+    return (x.T @ x) / x.shape[0]
+
+
+def simulate_ancestry(n_individuals, blocks, block_rhos, h2, rng):
+    mafs = rng.uniform(0.05, 0.5, size=N_VARIANTS)
+    genotype = simulate_genotypes(n_individuals, blocks, block_rhos, mafs, rng)
+    y = simulate_phenotype(genotype, CAUSAL_IDX, h2, rng)
+    betas, ses, pvals, zs = marginal_regression(genotype, y)
+    ld = compute_ld(genotype)
+    gwas_df = pd.DataFrame({
+        "chrom": CHROM,
+        "snp": SNP_IDS,
+        "pos": POSITIONS,
+        "a1": "A",
+        "a0": "G",
+        "beta": betas,
+        "se": ses,
+        "pval": pvals,
+        "z": zs,
+    })
+    return gwas_df, ld
+
+
+def write_gwas(df, path):
+    df.to_csv(path, sep="\t", index=False)
+
+
+def write_ld(ld, snp_ids, path):
+    pd.DataFrame(ld, columns=snp_ids).round(6).to_csv(path, sep="\t", index=False)
+
+
+def main():
+    DATA_DIR.mkdir(exist_ok=True)
+
+    rng_eur = np.random.default_rng(SEED)
+    rng_afr = np.random.default_rng(SEED + 1)
+
+    eur_blocks = build_blocks(N_VARIANTS, EUR_CAUSAL_BLOCK)
+    afr_blocks = build_blocks(N_VARIANTS, AFR_CAUSAL_BLOCK)
+    eur_rhos = [RHO_CAUSAL_BLOCK] + [RHO_FILLER_BLOCK] * (len(eur_blocks) - 1)
+    afr_rhos = [RHO_CAUSAL_BLOCK] + [RHO_FILLER_BLOCK] * (len(afr_blocks) - 1)
+
+    eur_gwas, eur_ld = simulate_ancestry(N_EUR, eur_blocks, eur_rhos, H2_EUR, rng_eur)
+    afr_gwas, afr_ld = simulate_ancestry(N_AFR, afr_blocks, afr_rhos, H2_AFR, rng_afr)
+
+    write_gwas(eur_gwas, DATA_DIR / "EUR.gwas.tsv")
+    write_gwas(afr_gwas, DATA_DIR / "AFR.gwas.tsv")
+    write_ld(eur_ld, SNP_IDS, DATA_DIR / "EUR.ld.tsv")
+    write_ld(afr_ld, SNP_IDS, DATA_DIR / "AFR.ld.tsv")
+
+    print(f"EUR causal SNP ({SNP_IDS[CAUSAL_IDX]}) z: {eur_gwas.loc[CAUSAL_IDX, 'z']:.2f}")
+    print(f"AFR causal SNP ({SNP_IDS[CAUSAL_IDX]}) z: {afr_gwas.loc[CAUSAL_IDX, 'z']:.2f}")
+
+
+if __name__ == "__main__":
+    main()
