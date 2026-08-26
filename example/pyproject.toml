@@ -8,6 +8,8 @@ dependencies = [
     "matplotlib>=3.11.1",
     "numpy>=2.5.2",
     "pandas>=3.0.5",
+    "pillow>=12.3.0",
+    "plotnine>=0.15.8",
     "scipy>=1.18.1",
     "sushie==0.20",
 ]
