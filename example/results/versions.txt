@@ -1,0 +1,4 @@
+R: R version 4.3.3 (2024-02-29)
+susieR: 0.14.2
+python: Python 3.13.12
+sushie: 0.20

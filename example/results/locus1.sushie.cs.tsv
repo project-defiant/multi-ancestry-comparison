@@ -1,2 +1,2 @@
 SNPIndex	chrom	snp	pos	a0	a1	pi	CSIndex	alpha	c_alpha	pip_all	pip_cs	trait	n_snps	ancestry
-24	1	snp25	1048000	G	A	0.02	1	1.0	1.0	1.0	1.0	locus1	50	sushie
+24	1	snp25	1048000	G	A	0.02	1	0.9999327478913755	0.9999327478913755	0.9999327478913755	0.9999327478913755	locus1	50	sushie

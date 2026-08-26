@@ -15,12 +15,12 @@ sushie finemap
 	--output results/locus1
 
 Starting log...
-[2026-08-26 02:14:21 - INFO] Start fine-mapping using SuShiE on summary-level data.
-[2026-08-26 02:14:21 - INFO] Detect GWAS files for locus1 for 2 ancestries.
-[2026-08-26 02:14:21 - INFO] Detect LD data in tsv files for 2 ancestries.
-[2026-08-26 02:14:21 - INFO] Detect sample sizes for 2 ancestries.
-[2026-08-26 02:14:22 - INFO] Prepare 50 SNPs from 2 ancestries after data cleaning. Specify --verbose for details.
-[2026-08-26 02:14:22 - INFO] Start fine-mapping using SuShiE with 1 effects.
-[2026-08-26 02:14:24 - INFO] Optimization concludes after 23 iterations. Final ELBO score: -99246.917. Reach minimum tolerance threshold 0.001.
-[2026-08-26 02:14:24 - INFO] 1 out of 1 credible sets remain after pruning based on purity (0.5). For detailed results, specify --alphas.
-[2026-08-26 02:14:25 - INFO] Fine-mapping finishes for locus1, and thanks for using our software. For bug reporting, suggestions, and comments, please go to https://github.com/mancusolab/sushie.
+[2026-08-26 02:24:02 - INFO] Start fine-mapping using SuShiE on summary-level data.
+[2026-08-26 02:24:02 - INFO] Detect GWAS files for locus1 for 2 ancestries.
+[2026-08-26 02:24:02 - INFO] Detect LD data in tsv files for 2 ancestries.
+[2026-08-26 02:24:02 - INFO] Detect sample sizes for 2 ancestries.
+[2026-08-26 02:24:03 - INFO] Prepare 50 SNPs from 2 ancestries after data cleaning. Specify --verbose for details.
+[2026-08-26 02:24:03 - INFO] Start fine-mapping using SuShiE with 1 effects.
+[2026-08-26 02:24:05 - INFO] Optimization concludes after 23 iterations. Final ELBO score: -99243.495. Reach minimum tolerance threshold 0.001.
+[2026-08-26 02:24:06 - INFO] 1 out of 1 credible sets remain after pruning based on purity (0.5). For detailed results, specify --alphas.
+[2026-08-26 02:24:06 - INFO] Fine-mapping finishes for locus1, and thanks for using our software. For bug reporting, suggestions, and comments, please go to https://github.com/mancusolab/sushie.
