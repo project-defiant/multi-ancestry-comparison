@@ -24,6 +24,8 @@ from plotnine import (
     ylim,
 )
 
+from simulate import N_AFR, N_EUR
+
 RESULTS_DIR = Path(__file__).resolve().parent.parent / "results"
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 
@@ -129,7 +131,7 @@ def compose_grid(panels, output_path, rows=GRID_ROWS, cols=GRID_COLS):
     canvas.save(output_path)
 
 
-def build_locus_zoom_panel(eur_gwas, afr_gwas):
+def build_locus_zoom_panel(eur_gwas, afr_gwas, n_eur, n_afr):
     eur = eur_gwas.assign(ancestry="EUR", neglog10p=-np.log10(eur_gwas["pval"]))
     afr = afr_gwas.assign(ancestry="AFR", neglog10p=-np.log10(afr_gwas["pval"]))
     long_df = pd.concat([eur, afr], ignore_index=True)
@@ -137,7 +139,7 @@ def build_locus_zoom_panel(eur_gwas, afr_gwas):
         ggplot(long_df, aes(x="pos", y="neglog10p", color="ancestry"))
         + geom_point(size=4, alpha=0.85)
         + scale_color_manual(values={"EUR": "#4C72B0", "AFR": "#DD8452"}, name="Ancestry")
-        + labs(x="Position (bp)", y="-log10(p)", title="GWAS locus zoom")
+        + labs(x="Position (bp)", y="-log10(p)", title=f"GWAS N_afr = {n_afr}, N_EUR={n_eur}")
         + theme_presentation(legend_position="right")
     )
     return plot, None
@@ -194,9 +196,9 @@ def plot_summary_figure():
     sushie = load_sushie_weights(RESULTS_DIR / "locus1.sushie.weights.tsv")
 
     panels = [
-        build_locus_zoom_panel(eur_gwas, afr_gwas),
         build_ld_panel(afr_ld, "AFR LD matrix"),
         build_ld_panel(eur_ld, "EUR LD matrix"),
+        build_locus_zoom_panel(eur_gwas, afr_gwas, n_eur=N_EUR, n_afr=N_AFR),
         build_pip_panel(afr_cs, "AFR susieR"),
         build_pip_panel(eur_cs, "EUR susieR"),
         build_pip_panel(sushie, "sushie (EUR+AFR)"),
