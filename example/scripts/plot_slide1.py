@@ -4,6 +4,11 @@ marginal scan (panel 1) -> locus definition (panel 2) -> fine-mapping (panel
 slides/ (gwas.md, locus_definition.md, finemapping.md) -- the equations live
 in those markdown files, not in these figures.
 
+Styled to match plot_results.py (the susieR-vs-sushie summary figure):
+plotnine, theme_presentation(), transparent background, the same RED/GREY
+significance palette and adjustText-nudged SNP labels, rather than the
+Open-Targets-navy matplotlib look used in plot_why_finemapping.py.
+
 Inputs (from simulate_locus_breaker.py + finemap_susieR.R; no re-run needed
 unless those change):
     data/locus_scan.gwas.tsv          both loci, combined marginal scan
@@ -21,29 +26,40 @@ Run: uv run python scripts/plot_slide1.py    (from example/)
 
 from pathlib import Path
 
-import matplotlib
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from matplotlib.patches import Rectangle
+from adjustText import adjust_text
+from plotnine import (
+    aes,
+    element_blank,
+    element_rect,
+    element_text,
+    geom_hline,
+    geom_point,
+    geom_rect,
+    geom_text,
+    geom_vline,
+    ggplot,
+    labs,
+    scale_color_manual,
+    scale_fill_manual,
+    theme,
+    theme_minimal,
+    ylim,
+)
 
 HERE = Path(__file__).resolve().parent
 EXAMPLE = HERE.parent
 DATA = EXAMPLE / "data"
 RESULTS = EXAMPLE / "results"
 
-# Open Targets palette, matching plot_why_finemapping.py so every slide-1
-# figure sits inside the same deck.
-NAVY = "#163A5F"
-BLUE_MID = "#4A93CB"
-GREY = "#58595B"
-MUTE = "#B9BEC4"
-FAINT = "#CFDCE8"
-BAND = "#EDF3F9"
-ACCENT = "#B4530A"          # reserved for the causal variant and nothing else
-LOCUS_A_COLOR = "#2C77B5"
-LOCUS_B_COLOR = "#8FB8DE"
+PANEL_WIDTH = 8.0
+PANEL_HEIGHT = 5.0
+DPI = 200
+
+RED = "#C44E52"
+GREY = "#8C8C8C"
+LOCUS_FILL = {"1": "#4C72B0", "2": "#DD8452"}
 
 GW_SIG = 5e-8
 LEAD_PVALUE = 5e-8
@@ -55,27 +71,58 @@ CAUSAL_A = "locusA_snp18"
 CAUSAL_B = "locusB_snp8"
 
 
-def style_axes(ax):
-    ax.grid(axis="y", color=BAND, lw=1.0)
-    ax.set_axisbelow(True)
-    for side in ("top", "right"):
-        ax.spines[side].set_visible(False)
-    for side in ("left", "bottom"):
-        ax.spines[side].set_edgecolor(FAINT)
-    ax.tick_params(colors=GREY, labelsize=9.5)
+def theme_presentation(base_size=18, legend_position="none"):
+    return (
+        theme_minimal(base_size=base_size)
+        + theme(
+            legend_position=legend_position,
+            figure_size=(PANEL_WIDTH, PANEL_HEIGHT),
+            plot_background=element_rect(fill="none", color="none"),
+            panel_background=element_rect(fill="none", color="none"),
+            legend_background=element_rect(fill="none", color="none"),
+            legend_key=element_rect(fill="none", color="none"),
+            panel_grid_minor=element_blank(),
+            axis_text=element_text(size=base_size * 0.7),
+            axis_title=element_text(size=base_size * 0.85),
+            plot_title=element_text(size=base_size, weight="bold"),
+            plot_subtitle=element_text(size=base_size * 0.6, color=GREY),
+            legend_text=element_text(size=base_size * 0.7),
+            legend_title=element_text(size=base_size * 0.8),
+        )
+    )
 
 
-def head(ax, title, subtitle):
-    ax.text(0, 1.16, title, transform=ax.transAxes, fontsize=14,
-             fontweight="bold", color=NAVY, va="baseline")
-    ax.text(0, 1.07, subtitle, transform=ax.transAxes, fontsize=10.5,
-             color=GREY, va="baseline")
+def render_panel(plot, label_anchors=None):
+    """Draw a plotnine plot to a matplotlib Figure, nudging any geom_text
+    labels apart with adjustText so they stay close to their own point while
+    never overlapping (mirrors plot_results.py's render_panel)."""
+    fig = plot.draw()
+    ax = fig.axes[0]
+    if label_anchors is not None and len(label_anchors) > 0:
+        texts = list(ax.texts)
+        adjust_text(
+            texts,
+            x=list(label_anchors["x"]),
+            y=list(label_anchors["y"]),
+            ax=ax,
+            expand_axes=True,
+            force_text=(0.4, 0.8),
+            expand=(1.3, 1.6),
+            arrowprops=dict(arrowstyle="-", color=RED, lw=1.2, alpha=0.7),
+        )
+    return fig
+
+
+def save_panel(plot, label_anchors, path):
+    fig = render_panel(plot, label_anchors)
+    fig.savefig(path, dpi=DPI, transparent=True)
 
 
 def load_scan():
     df = pd.read_csv(DATA / "locus_scan.gwas.tsv", sep="\t")
     df["kb"] = (df.pos - df.pos.min()) / 1000.0
-    df["logp"] = -np.log10(df.pval)
+    df["neglog10p"] = -np.log10(df.pval)
+    df["sig"] = df.pval < GW_SIG
     return df
 
 
@@ -103,149 +150,149 @@ def locus_breaker(df, baseline_pvalue, distance_cutoff, pvalue_cutoff, flanking_
     return pd.DataFrame(loci)
 
 
-def scatter_scan(ax, df):
-    sig = df.pval < GW_SIG
-    colors = np.where(df.locus == "A", LOCUS_A_COLOR, LOCUS_B_COLOR)
-    ax.scatter(df.kb[~sig], df.logp[~sig], s=50, c=MUTE, edgecolor="white",
-               linewidth=0.6, zorder=2)
-    ax.scatter(df.kb[sig], df.logp[sig], s=95, c=list(colors[sig.values]),
-               edgecolor="white", linewidth=0.9, zorder=4)
-    ax.axhline(-np.log10(GW_SIG), color=GREY, ls=(0, (5, 4)), lw=1.1, zorder=1)
-    ax.text(df.kb.max(), -np.log10(GW_SIG) + 0.25, "p = 5×10⁻⁸",
-            ha="right", va="bottom", fontsize=9.5, color=GREY)
-    ax.set_ylabel("−log₁₀ p", fontsize=11, color=GREY)
-    ax.set_xlabel("position (kb)", fontsize=10.5, color=GREY)
-    ax.set_ylim(-0.5, df.logp.max() * 1.25)
-    return sig
+def causal_labels(df, snps):
+    labels = df[df.snp.isin(snps)].copy()
+    labels["label"] = labels.snp + " (causal)"
+    return labels
 
 
-def annotate_causal(ax, df, snp, dy=0.0):
-    row = df[df.snp == snp].iloc[0]
-    y = row.logp + df.logp.max() * 0.08 + dy
-    ax.plot([row.kb, row.kb], [row.logp + 0.15, y - 0.12], color=ACCENT, lw=1.0, zorder=5)
-    ax.scatter([row.kb], [y], marker="*", s=260, c=ACCENT, edgecolor="white",
-               linewidth=0.7, zorder=6)
-    near_right_edge = row.kb > df.kb.max() * 0.85
-    ha, xoffset = ("right", -10) if near_right_edge else ("left", 10)
-    ax.annotate(f"{row.snp} (causal)", (row.kb, y), textcoords="offset points",
-                xytext=(xoffset, 0), ha=ha, va="center", fontsize=10, color=ACCENT)
+def build_gwas_manhattan_panel(df):
+    n_sig_a = int((df.sig & (df.locus == "A")).sum())
+    labels = causal_labels(df, [CAUSAL_A, CAUSAL_B])
+
+    plot = (
+        ggplot(df, aes(x="kb", y="neglog10p", color="sig"))
+        + geom_point(size=4, alpha=0.85)
+        + geom_hline(yintercept=-np.log10(GW_SIG), linetype="dashed", color=GREY, size=0.8)
+        + geom_text(
+            data=labels,
+            mapping=aes(x="kb", y="neglog10p", label="label"),
+            inherit_aes=False,
+            nudge_y=df.neglog10p.max() * 0.06,
+            size=13,
+            color=RED,
+            fontweight="bold",
+        )
+        + scale_color_manual(values={True: RED, False: GREY})
+        + labs(
+            x="Position (kb)",
+            y="-log10(p)",
+            title="1. Single-variant association",
+            subtitle=f"{n_sig_a} SNPs in locus A cross genome-wide significance —\n"
+                     "the marginal test alone can't tell which is causal",
+        )
+        + theme_presentation()
+    )
+    label_anchors = labels[["kb", "neglog10p"]].rename(columns={"kb": "x", "neglog10p": "y"})
+    return plot, label_anchors
 
 
-def plot_gwas_manhattan(df):
-    fig, ax = plt.subplots(figsize=(10.5, 5.6), dpi=200)
-    fig.patch.set_facecolor("white")
-    fig.subplots_adjust(left=0.09, right=0.97, top=0.80, bottom=0.15)
-    style_axes(ax)
-
-    sig = scatter_scan(ax, df)
-    annotate_causal(ax, df, CAUSAL_A)
-    annotate_causal(ax, df, CAUSAL_B, dy=df.logp.max() * 0.18)
-
-    n_sig_a = int(((df.locus == "A") & sig).sum())
-    ax.text(0.015, 0.965,
-            f"Locus A: {n_sig_a} variants cross genome-wide significance — "
-            "the marginal test alone cannot tell which is causal",
-            transform=ax.transAxes, ha="left", va="top", fontsize=10.5, color=NAVY)
-
-    head(ax, "1. Single-variant (marginal) association",
-         "one regression per SNP, testing each in isolation")
-    fig.savefig(RESULTS / "fig_gwas_manhattan.png", facecolor="white")
-    plt.close(fig)
-    print(f"wrote {RESULTS / 'fig_gwas_manhattan.png'}: {n_sig_a} significant in locus A")
-
-
-def plot_locus_definition(df):
+def build_locus_definition_panel(df):
     loci = locus_breaker(df, BASELINE_PVALUE, DISTANCE_CUTOFF, LEAD_PVALUE, FLANKING_DISTANCE)
-
-    fig, ax = plt.subplots(figsize=(10.5, 5.6), dpi=200)
-    fig.patch.set_facecolor("white")
-    fig.subplots_adjust(left=0.09, right=0.97, top=0.80, bottom=0.15)
-    style_axes(ax)
-
     x0 = df.pos.min()
-    for _, locus in loci.iterrows():
-        ax.axvspan((locus.start - x0) / 1000, (locus.end - x0) / 1000,
-                   color=LOCUS_A_COLOR if locus.locus_id == loci.locus_id.min() else LOCUS_B_COLOR,
-                   alpha=0.12, zorder=0)
-
-    scatter_scan(ax, df)
-    ax.axhline(-np.log10(BASELINE_PVALUE), color=BLUE_MID, ls=(0, (2, 3)), lw=1.1, zorder=1)
-    ax.text(df.kb.max(), -np.log10(BASELINE_PVALUE) + 0.25,
-            f"baseline p = {BASELINE_PVALUE:.0e} (corridor floor)",
-            ha="right", va="bottom", fontsize=9.5, color=BLUE_MID)
-
+    rects = pd.DataFrame({
+        "xmin": (loci.start - x0) / 1000,
+        "xmax": (loci.end - x0) / 1000,
+        "ymin": -1.0,
+        "ymax": df.neglog10p.max() * 1.15,
+        "locus": [str(i + 1) for i in range(len(loci))],
+    })
     a_end_kb = (df[df.locus == "A"].pos.max() - x0) / 1000
     b_start_kb = (df[df.locus == "B"].pos.min() - x0) / 1000
-    y_bracket = df.logp.max() * 1.05
-    ax.annotate("", xy=(b_start_kb, y_bracket), xytext=(a_end_kb, y_bracket),
-                arrowprops=dict(arrowstyle="<->", color=GREY, lw=1.1))
-    ax.text((a_end_kb + b_start_kb) / 2, y_bracket + df.logp.max() * 0.03,
-            f"gap {DISTANCE_CUTOFF / 1000:.0f}kb+ → split into two loci",
-            ha="center", va="bottom", fontsize=9.5, color=GREY)
-    ax.set_ylim(-0.5, df.logp.max() * 1.30)
+    gap_label = pd.DataFrame({
+        "x": [(a_end_kb + b_start_kb) / 2],
+        "y": [df.neglog10p.max() * 1.05],
+        "label": [f"gap {DISTANCE_CUTOFF / 1000:.0f}kb+ → split into two loci"],
+    })
+    locus_labels = pd.DataFrame({
+        "x": ((loci.start + loci.end) / 2 - x0) / 1000,
+        "y": -0.6,
+        "label": [f"locus {i + 1}\nlead: {row.lead_snp}" for i, row in loci.iterrows()],
+    })
 
-    for _, locus in loci.iterrows():
-        mid = ((locus.start + locus.end) / 2 - x0) / 1000
-        ax.text(mid, -0.35, f"locus {int(locus.locus_id)}\nlead: {locus.lead_snp}",
-                ha="center", va="top", fontsize=9, color=NAVY)
+    plot = (
+        ggplot(df, aes(x="kb", y="neglog10p"))
+        + geom_rect(
+            data=rects,
+            mapping=aes(xmin="xmin", xmax="xmax", ymin="ymin", ymax="ymax", fill="locus"),
+            inherit_aes=False, alpha=0.15,
+        )
+        + scale_fill_manual(values=LOCUS_FILL, guide=None)
+        + geom_point(mapping=aes(color="sig"), size=4, alpha=0.85)
+        + scale_color_manual(values={True: RED, False: GREY})
+        + geom_hline(yintercept=-np.log10(GW_SIG), linetype="dashed", color=GREY, size=0.8)
+        + geom_hline(yintercept=-np.log10(BASELINE_PVALUE), linetype="dotted", color=GREY, size=0.8)
+        + geom_vline(xintercept=a_end_kb, linetype="dotted", color=GREY, size=0.6)
+        + geom_vline(xintercept=b_start_kb, linetype="dotted", color=GREY, size=0.6)
+        + geom_text(data=gap_label, mapping=aes(x="x", y="y", label="label"),
+                    inherit_aes=False, size=11, color=GREY)
+        + geom_text(data=locus_labels, mapping=aes(x="x", y="y", label="label"),
+                    inherit_aes=False, size=10, color="black", lineheight=1.0)
+        + labs(
+            x="Position (kb)",
+            y="-log10(p)",
+            title="2. Locus definition (locus-breaker)",
+            subtitle=f"baseline p ≤ {BASELINE_PVALUE:.0e} keeps candidates; a gap > {DISTANCE_CUTOFF // 1000}kb splits the locus;\n"
+                     f"only windows with a lead p ≤ {LEAD_PVALUE:.0e} are kept",
+        )
+        + theme_presentation()
+    )
+    return plot, None, loci
 
-    head(ax, "2. Locus definition (locus-breaker)",
-         f"baseline p ≤ {BASELINE_PVALUE:.0e} keeps candidates; a gap > "
-         f"{DISTANCE_CUTOFF // 1000}kb between them splits the locus; only "
-         f"windows with a lead p ≤ {LEAD_PVALUE:.0e} are kept")
-    fig.savefig(RESULTS / "fig_locus_breaker.png", facecolor="white")
-    plt.close(fig)
-    print(f"wrote {RESULTS / 'fig_locus_breaker.png'}: {len(loci)} loci -> "
-          f"{loci.lead_snp.tolist()}")
 
-
-def plot_finemapping_pip():
+def build_finemapping_pip_panel():
     gwas = pd.read_csv(DATA / "locus_scan.locusA.gwas.tsv", sep="\t")
     cs = pd.read_csv(RESULTS / "locusA.susieR.cs.tsv", sep="\t")
     df = gwas.merge(cs[["snp", "pip", "cs_id"]], on="snp", validate="one_to_one")
     df["kb"] = (df.pos - df.pos.min()) / 1000.0
-    inset = df.cs_id == 1
-    n_cs, cs_mass = int(inset.sum()), float(df.pip[inset].sum())
+    df["in_cs"] = df.cs_id == 1
+    n_cs, cs_mass = int(df.in_cs.sum()), float(df.pip[df.in_cs].sum())
 
-    fig, ax = plt.subplots(figsize=(10.5, 5.6), dpi=200)
-    fig.patch.set_facecolor("white")
-    fig.subplots_adjust(left=0.09, right=0.97, top=0.80, bottom=0.15)
-    style_axes(ax)
+    labels = df[df.in_cs].sort_values("pos").copy()
+    labels["label"] = labels.snp + np.where(labels.snp == CAUSAL_A, " (causal)", "")
 
-    ax.vlines(df.kb[~inset], 0, df.pip[~inset], color=MUTE, lw=2.0, zorder=2)
-    ax.scatter(df.kb[~inset], df.pip[~inset], s=45, c=MUTE, edgecolor="white",
-               linewidth=0.6, zorder=3)
-    ax.vlines(df.kb[inset], 0, df.pip[inset], color=NAVY, lw=2.8, zorder=4)
-    ax.scatter(df.kb[inset], df.pip[inset], s=100, c=NAVY, edgecolor="white",
-               linewidth=0.9, zorder=5)
-
-    ymax = max(0.5, df.pip.max() * 1.35)
-    row = df[df.snp == CAUSAL_A].iloc[0]
-    star_y = row.pip + ymax * 0.08
-    ax.plot([row.kb, row.kb], [row.pip + 0.012, star_y - 0.012], color=ACCENT, lw=1.0, zorder=6)
-    ax.scatter([row.kb], [star_y], marker="*", s=260, c=ACCENT, edgecolor="white",
-               linewidth=0.7, zorder=7)
-    ax.annotate(f"{row.snp} (causal)", (row.kb, star_y), textcoords="offset points",
-                xytext=(10, 0), ha="left", va="center", fontsize=10, color=ACCENT)
-
-    ax.set_ylabel("posterior inclusion probability", fontsize=11, color=GREY)
-    ax.set_xlabel("position in locus A (kb)", fontsize=10.5, color=GREY)
-    ax.set_ylim(0, ymax)
-    ax.text(0.985, 0.965, f"95% credible set: {n_cs} of {len(df)} SNPs, PIP {cs_mass:.2f}",
-            transform=ax.transAxes, ha="right", va="top", fontsize=10.5, color=NAVY)
-
-    head(ax, "3. Fine-mapping (SuSiE)",
-         "one joint regression over the whole locus, using its LD structure")
-    fig.savefig(RESULTS / "fig_finemapping_pip.png", facecolor="white")
-    plt.close(fig)
-    print(f"wrote {RESULTS / 'fig_finemapping_pip.png'}: CS size {n_cs} ({', '.join(df.snp[inset])})")
+    plot = (
+        ggplot(df, aes(x="kb", y="pip", color="in_cs"))
+        + geom_point(size=5)
+        + geom_text(
+            data=labels,
+            mapping=aes(x="kb", y="pip", label="label"),
+            inherit_aes=False,
+            nudge_y=0.05,
+            size=13,
+            color=RED,
+            fontweight="bold",
+        )
+        + scale_color_manual(values={True: RED, False: GREY})
+        + ylim(-0.05, 1.15)
+        + labs(
+            x="Position in locus A (kb)",
+            y="PIP",
+            title="3. Fine-mapping (SuSiE)",
+            subtitle=f"one joint regression over the whole locus — 95% credible set: "
+                     f"{n_cs} of {len(df)} SNPs, PIP {cs_mass:.2f}",
+        )
+        + theme_presentation()
+    )
+    label_anchors = labels[["kb", "pip"]].rename(columns={"kb": "x", "pip": "y"})
+    return plot, label_anchors
 
 
 def main():
     df = load_scan()
-    plot_gwas_manhattan(df)
-    plot_locus_definition(df)
-    plot_finemapping_pip()
+
+    plot, anchors = build_gwas_manhattan_panel(df)
+    save_panel(plot, anchors, RESULTS / "fig_gwas_manhattan.png")
+    print(f"wrote {RESULTS / 'fig_gwas_manhattan.png'}")
+
+    plot, anchors, loci = build_locus_definition_panel(df)
+    save_panel(plot, anchors, RESULTS / "fig_locus_breaker.png")
+    print(f"wrote {RESULTS / 'fig_locus_breaker.png'}: {len(loci)} loci -> "
+          f"{loci.lead_snp.tolist()}")
+
+    plot, anchors = build_finemapping_pip_panel()
+    save_panel(plot, anchors, RESULTS / "fig_finemapping_pip.png")
+    print(f"wrote {RESULTS / 'fig_finemapping_pip.png'}")
 
 
 if __name__ == "__main__":
