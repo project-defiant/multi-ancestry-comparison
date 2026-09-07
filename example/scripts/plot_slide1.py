@@ -168,7 +168,7 @@ def build_gwas_manhattan_panel(df):
             data=labels,
             mapping=aes(x="kb", y="neglog10p", label="label"),
             inherit_aes=False,
-            nudge_y=df.neglog10p.max() * 0.06,
+            nudge_y=df.neglog10p.max() * 0.02,
             size=13,
             color=RED,
             fontweight="bold",
