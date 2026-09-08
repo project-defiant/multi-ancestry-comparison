@@ -50,8 +50,9 @@ WHAT IT DOES NOT CLAIM
 ----------------------
 The multivariable fit goes from 50 candidates to 4. It does not identify the causal
 variant: snp25 (causal, known only because this is a simulation) carries PIP
-0.237, below snp21's 0.334. Both variants are labelled in panels 1 and 3 so the
-reader can see it rather than being told.
+0.237, below snp21's 0.334. All four credible-set members are labelled by name
+in panel 3 (not just the top-PIP one) so the reader can see the CS is still
+ambiguous, rather than reading the top label as "the answer".
 
 Every annotated number is computed from the input files at run time.
 
@@ -83,6 +84,7 @@ notation from the same markup.
 Run: uv run python scripts/plot_why_finemapping.py    (from example/)
 """
 
+import itertools
 from pathlib import Path
 
 import matplotlib
@@ -281,10 +283,17 @@ def panel_pip(ax, df, n_cs, cs_mass):
                 textcoords="offset points", xytext=(12, 0), ha="left",
                 va="center", fontsize=10.5, color=ACCENT)
 
-    top = df.loc[df.pip.idxmax()]
-    ax.annotate(f"{top.snp}", (top.kb, top.pip), textcoords="offset points",
-                xytext=(-9, 4), ha="right", va="bottom", fontsize=10.5,
-                color=NAVY)
+    # Label every other credible-set member, not just the top-PIP one -- the
+    # point of this panel is that the CS is still ambiguous, and a single
+    # name label reads as "this is the answer" even though the colour
+    # already marks all four dots as tied in the credible set.
+    other_cs = df[inset & (df.snp != TRUE_CAUSAL)].sort_values("kb")
+    offsets = [(-9, 4), (9, 18), (-9, -18), (9, 4)]
+    for (_, row), (dx, dy) in zip(other_cs.iterrows(), itertools.cycle(offsets)):
+        ax.annotate(f"{row.snp}", (row.kb, row.pip), textcoords="offset points",
+                    xytext=(dx, dy), ha="right" if dx < 0 else "left",
+                    va="bottom" if dy >= 0 else "top", fontsize=10.5,
+                    color=NAVY)
 
     ax.set_ylabel("posterior inclusion probability", fontsize=11, color=GREY)
     ax.set_xlabel("position in locus (kb)", fontsize=10.5, color=GREY)
